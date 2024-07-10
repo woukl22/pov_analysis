@@ -11,11 +11,11 @@ from sklearn.metrics import silhouette_score
 # Load data
 @st.cache_data
 def load_data():
-    return pd.read_csv('./fin_score_p.csv').drop(columns=['Unnamed: 0'])
+    return pd.read_csv('./fin_score_p.csv').drop(columns=['Unnamed: 0']).rename(columns={'contribution_s': 'contribution', 'stability_s': 'stability', 'popularity_s':'popularity', 'commission_s': 'commission', 'period_s': 'period'})
 
 data = load_data()
 
-st.title("Cluster Analysis and Visualization")
+st.title("Validator Analysis with RadViz")
 
 # Extract unique chain names for the dropdown menu
 chain_list = data['chain'].unique().tolist()
@@ -31,11 +31,11 @@ if 'cluster_num' not in st.session_state:
     st.session_state.cluster_num = 3
 if 'weights' not in st.session_state:
     st.session_state.weights = {
-        'contribution_s': 1,
-        'stability_s': 1,
-        'popularity_s': 1,
-        'commission_s': 1,
-        'period_s': 1
+        'contribution': 1,
+        'stability': 1,
+        'popularity': 1,
+        'commission': 1,
+        'period': 1
     }
 if 'show_correlation' not in st.session_state:
     st.session_state.show_correlation = False
@@ -44,7 +44,7 @@ if 'optimal_k' not in st.session_state:
 
 # Sidebar: Select chain name and settings
 with st.sidebar:
-    st.header("Settings")
+    st.header("Custom Input")
     chain_name = st.selectbox("Select chain name:", chain_list, index=chain_list.index(st.session_state.chain_name))
     if chain_name != st.session_state.chain_name:
         st.session_state.show_correlation = False
@@ -55,30 +55,30 @@ with st.sidebar:
         st.session_state.show_correlation = True
 
     if st.session_state.show_correlation:
-        afin = data[data['period_s'].isna() == False].reset_index(drop=True)
+        afin = data[data['period'].isna() == False].reset_index(drop=True)
         akash = afin[afin['chain'] == st.session_state.chain_name].drop(columns=['chain'])
 
         # Correlation heatmap
-        corr = akash[['contribution_s', 'stability_s', 'popularity_s', 'commission_s', 'period_s']].corr()
+        corr = akash[['contribution', 'stability', 'popularity', 'commission', 'period']].corr()
         fig, ax = plt.subplots()
         sns.heatmap(corr, annot=True, cmap='Oranges', ax=ax)
         ax.set_title('Correlation Heatmap')
         st.pyplot(fig)
 
     # Sidebar: Set weights for evaluation indicators
-    st.write("### Set Weights for Evaluation Indicators")
+    st.write("### Set Weights for Scores")
     weights = {}
-    for indicator in ['contribution_s', 'stability_s', 'popularity_s', 'commission_s', 'period_s']:
+    for indicator in ['contribution', 'stability', 'popularity', 'commission', 'period']:
         weights[indicator] = st.slider(f"{indicator}", 0, 5, st.session_state.weights[indicator])
         st.session_state.weights[indicator] = weights[indicator]
 
     # Sidebar: Evaluate KMeans
     if st.button("KMeans Evaluate"):
-        afin = data[data['period_s'].isna() == False].reset_index(drop=True)
+        afin = data[data['period'].isna() == False].reset_index(drop=True)
         akash = afin[afin['chain'] == st.session_state.chain_name].drop(columns=['chain'])
 
         # Apply weights and exclude columns with weight 0
-        for indicator in ['contribution_s', 'stability_s', 'popularity_s', 'commission_s', 'period_s']:
+        for indicator in ['contribution', 'stability', 'popularity', 'commission', 'period']:
             if st.session_state.weights[indicator] == 0:
                 akash = akash.drop(columns=[indicator])
             else:
@@ -129,11 +129,11 @@ cluster_num = st.number_input("Select number of clusters:", min_value=2, max_val
 
 def run_analysis():
     st.session_state.cluster_num = cluster_num
-    afin = data[data['period_s'].isna() == False].reset_index(drop=True)
+    afin = data[data['period'].isna() == False].reset_index(drop=True)
     akash = afin[afin['chain'] == st.session_state.chain_name].drop(columns=['chain'])
 
     # Apply weights and exclude columns with weight 0
-    for indicator in ['contribution_s', 'stability_s', 'popularity_s', 'commission_s', 'period_s']:
+    for indicator in ['contribution', 'stability', 'popularity', 'commission', 'period']:
         if st.session_state.weights[indicator] == 0:
             akash = akash.drop(columns=[indicator])
         else:
@@ -147,8 +147,7 @@ def run_analysis():
     kmeans.fit_transform(akash_k)
     akash['kmeanscluster'] = kmeans.labels_
 
-    # Radviz plot for all voters
-    st.write("### Radviz Plot for All Voters")
+    # Radviz
     fig, ax = plt.subplots()
     classs = [i for i in range(st.session_state.cluster_num)]
     visualizer = RadViz(classes=classs, ax=ax)
@@ -158,25 +157,25 @@ def run_analysis():
     fig.savefig("radviz_plot_all.png")
     st.image("radviz_plot_all.png")
 
-    # Display cluster counts and statistics
+    # Display cluster statistics
     st.write("### Cluster Statistics")
     akash = akash.rename(columns={'kmeanscluster': 'cluster'})
     
     cluster_counts = akash[['cluster', 'voter']].groupby(by='cluster').count()
     cluster_stats = akash.drop(columns=['voter']).groupby('cluster').mean()
     cluster_stats = cluster_stats.rename(columns={
-        'contribution_s': 'contribution_mean',
-        'stability_s': 'stability_mean',
-        'popularity_s': 'popularity_mean',
-        'commission_s': 'commission_mean',
-        'period_s': 'period_mean'
+        'contribution': 'contribution_mean',
+        'stability': 'stability_mean',
+        'popularity': 'popularity_mean',
+        'commission': 'commission_mean',
+        'period': 'period_mean'
     })
     cluster_counts = cluster_counts.rename(columns={'voter': 'count'})
     cluster_counts = pd.concat([cluster_counts, cluster_stats], axis=1)
     st.write(cluster_counts)
 
     # Top 10 voters
-    st.write("### Radviz Plot for Top 10 Voters")
+    st.write("### Top 10 Voters List")
     akash['total_score'] = akash.drop(columns=['voter']).sum(axis=1)
     top_10_voters = akash.sort_values(by='total_score', ascending=False)[:10].reset_index(drop=True)
     st.write(top_10_voters)
